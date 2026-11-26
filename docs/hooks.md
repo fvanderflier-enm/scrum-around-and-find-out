@@ -59,7 +59,7 @@ step you run yourself after the release (`safo hooks install`, then `safo hooks 
    yes; it only makes forgetting visible.
 3. **A local step or a reason for none**, while the last probe is fresh and found the local LLM reachable: a marker from
    `hooks.local_step_markers`, or `hooks.na_marker` followed by a reason.
-4. **No hidden work.** A brief carries a line of its own, `issue: owner/repo#N` or `issue: KEY-N`, naming an issue that
+4. **No hidden work.** A brief carries a line of its own, `issue: owner/repo#N`, `issue: KEY-N` or `issue: AB#N`, naming an issue that
    exists and is open (`no-issue`, `issue-unusable`, `issue-unverified`). A GitHub issue is checked over REST with a read-only
    `gh api repos/OWNER/REPO/issues/N` (its own rate-limit counter), then `gh issue view` (GraphQL) only if REST gave no
    answer; an open issue is remembered for five minutes. In `block` mode a lookup that fails on both denies and the

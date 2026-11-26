@@ -10,7 +10,7 @@ File the issue first. Put it on the board. Then start. Link it from the pull req
 
 | Where | What it does | Mode |
 |---|---|---|
-| `safo hooks guard` | A subagent brief must carry a line of its own, `issue: owner/repo#123` (or `issue: KEY-123`). The reference is checked read-only: it must exist and be open. | `warn` reports, `block` denies |
+| `safo hooks guard` | A subagent brief must carry a line of its own, `issue: owner/repo#123` (or `issue: KEY-123`, or `issue: AB#123` for Azure Boards). The reference is checked read-only: it must exist and be open. | `warn` reports, `block` denies |
 | `safo audit` | Exits 1 for a pull request that links no issue, a pull request or issue that is not on the board, a card with no Status, Area, Kind, Epic or Effort, a closed issue that is not Done, a Done card with no Done-on date. Each finding names the item. | read-only |
 | `safo audit` (mergeability) | Exits 1 with `CONFLICT owner/name#n` for an open pull request whose `mergeable` is `CONFLICTING`; prints a `BEHIND owner/name#n` note (exit code unchanged) for one that is behind its base; always prints a `NOTE    mergeability: N open pull requests, C conflicting, B behind, U not yet computed` count. A `mergeable` that GitHub has not computed yet (`UNKNOWN` or null) is counted in `U` and is never drift. One read per listed repository, no project-wide listing. | read-only |
 | `safo audit` (branch gate) | Exits 1 with `NO-GATE owner/name` for a listed repository whose default branch has no protection or active ruleset, is protected without the gate check (`CI green`), or allows force pushes. Exits 2 when the protection cannot be read. See [The branch gate](#the-branch-gate). | read-only |
@@ -34,6 +34,9 @@ issue: ChiefGyk3D/example#123
   `GraphQL`) or that both failed. The reference must match a strict pattern first, so shell metacharacters never reach a
   process; a rejected reference is not echoed back.
 - A Jira-style key, `KEY-123`, is accepted by its shape alone, because no Jira instance exists today. See the mapping below.
+- An Azure Boards work item, `AB#123`, is accepted by its shape alone too (a hook has seconds; `az` is slower than that
+  to start). On an Azure DevOps board, `safo audit` checks the work items and the pull requests' links themselves; see
+  [Azure DevOps](azure-devops.md).
 - No line, an invalid line, a missing or closed issue: in `block` mode the dispatch is denied with a message that says how
   to file one; in `warn` mode it is reported and allowed.
 - A lookup that cannot answer (no `gh`, not logged in, a timeout) fails closed in `block` mode and is reported in `warn`

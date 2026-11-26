@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import time
 from collections import defaultdict
+from collections.abc import Callable, Mapping
 from pathlib import Path
 
 from safo.agents import read_codex, read_copilot
@@ -14,6 +15,7 @@ from safo.errors import EXIT_OK, ConfigError, MalformedDataError
 from safo.guardlog import guard_lines
 from safo.live import load_live
 from safo.modes import Mode, register
+from safo.schema import Board
 
 HOURS_MAX = 24 * 366
 # Agents with no session or task list a shell can read: their work is only the cards that name them.
@@ -38,10 +40,14 @@ Q_AGENT_ITEMS = """query AgentItems(
 }"""
 
 
-def run(ctx: Context, args: argparse.Namespace) -> int:
-    board = ctx.board
+def check_hours(args: argparse.Namespace) -> None:
     if not (0 < args.hours <= HOURS_MAX):
         raise ConfigError(f"--hours must be above 0 and at most {HOURS_MAX:g}")
+
+
+def run(ctx: Context, args: argparse.Namespace) -> int:
+    board = ctx.board
+    check_hours(args)
     live = load_live(ctx.client, board.project)
     variables = {"id": live.id, "statusField": board.rules.status_field, "agentField": board.agents.field}
     field = next((f for f in board.fields if f.name == board.agents.field), None)
@@ -84,10 +90,19 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
             f"\nUnknown agent values (not options of {board.agents.field} in board.yaml): {', '.join(sorted(unknown))}"
         )
 
+    local_sections(ctx.say, ctx.env, board, args, known)
+    return EXIT_OK
+
+
+def local_sections(
+    say: Callable[[str], None], env: Mapping[str, str], board: Board, args: argparse.Namespace, known: set[str]
+) -> None:
+    """The sections read from this machine, not the board: the guard counts, Codex, Copilot, Claude and the card-only
+    agents. Shared by the GitHub and the Azure DevOps board."""
     if not args.no_guard:
-        ctx.say()
-        for line in guard_lines(ctx.env):
-            ctx.say(line)
+        say("")
+        for line in guard_lines(env):
+            say(line)
 
     if not args.no_codex:
         try:
@@ -95,34 +110,33 @@ def run(ctx: Context, args: argparse.Namespace) -> int:
         except RuntimeError:  # no home directory to expand ~ against
             root = Path(args.codex_dir)
         report = read_codex(root, args.hours, time.time())
-        ctx.say(f"\nCodex: sessions active in the last {args.hours:g} h, and plan limits")
+        say(f"\nCodex: sessions active in the last {args.hours:g} h, and plan limits")
         if not report.sessions:
-            ctx.say("  no Codex sessions in that window")
+            say("  no Codex sessions in that window")
         for s in report.sessions:
-            ctx.say(f"  {time.strftime('%H:%M', time.localtime(s.when))}  {s.state:<10} {s.cwd:<32} {s.last}")
+            say(f"  {time.strftime('%H:%M', time.localtime(s.when))}  {s.state:<10} {s.cwd:<32} {s.last}")
         if report.limits:
             lim = report.limits
-            ctx.say(
+            say(
                 f"  plan {lim.plan}: 5-hour window {lim.five_hour_percent}% (resets {lim.five_hour_resets}), "
                 f"weekly {lim.weekly_percent}% (resets {lim.weekly_resets})"
             )
     if not args.no_copilot:
-        ctx.say("\nCopilot coding agent: recent tasks")
+        say("\nCopilot coding agent: recent tasks")
         tasks = read_copilot()
         if tasks is None:
-            ctx.say("  (gh agent-task unavailable: needs gh >= 2.80 and a Copilot plan)")
+            say("  (gh agent-task unavailable: needs gh >= 2.80 and a Copilot plan)")
         for line in tasks or []:
-            ctx.say(f"  {line}")
-    ctx.say("\nClaude")
-    ctx.say("  Subagents run inside the Claude Code session and cannot be listed from a shell: watch its panel.")
-    ctx.say(f"  Their tasks are the board cards with {board.agents.field} = Claude above.")
+            say(f"  {line}")
+    say("\nClaude")
+    say("  Subagents run inside the Claude Code session and cannot be listed from a shell: watch its panel.")
+    say(f"  Their tasks are the board cards with {board.agents.field} = Claude above.")
     for name in CARD_ONLY_AGENTS:
         if name in known:
-            ctx.say(
+            say(
                 f"{name}: no session to list from a shell; "
                 f"its work is the board cards with {board.agents.field} = {name} above."
             )
-    return EXIT_OK
 
 
 def add_arguments(parser: argparse.ArgumentParser) -> None:

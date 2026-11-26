@@ -24,6 +24,7 @@ The top-level mapping is required and must contain:
 | `agents` | mapping | no | Agent status tracking |
 | `ui_only` | list | no | Manual settings not readable via the API |
 | `process` | mapping | no | The [process method](#process); absent means `{method: agile}` |
+| `azure_devops` | mapping | on Azure DevOps | The Azure DevOps settings; only with `project.platform: azure-devops` ([docs/azure-devops.md](azure-devops.md)) |
 
 Unknown keys are refused with the key path.
 
@@ -35,6 +36,7 @@ Unknown keys are refused with the key path.
 | `owner_type` | yes | `organization` or `user`. A GitHub App can write only an organization's projects |
 | `number` | no | The project number in its URL. Leave it out and `safo bootstrap` creates the project and prints the number to write here |
 | `title` | yes | The project's title (used when bootstrap creates it) |
+| `platform` | no | `github` (the default) or `azure-devops`. On Azure DevOps `owner` is the organization, `title` the Azure DevOps project, `owner_type` may be left out and `number` is refused: see [Azure DevOps](azure-devops.md) |
 
 ## repositories
 

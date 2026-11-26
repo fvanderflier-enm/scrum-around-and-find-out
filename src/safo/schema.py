@@ -14,7 +14,7 @@ import unicodedata
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 import yaml.constructor
@@ -23,10 +23,15 @@ import yaml.nodes
 
 from safo.errors import ConfigError
 
+if TYPE_CHECKING:
+    from safo.ado.config import AzureDevOps
+
 COLORS = ("GRAY", "BLUE", "GREEN", "YELLOW", "ORANGE", "RED", "PINK", "PURPLE")
 FIELD_TYPES = ("single_select", "iteration", "date", "text", "number")
 LAYOUTS = ("board", "table", "roadmap")
 OWNER_TYPES = ("organization", "user")
+PLATFORMS = ("github", "azure-devops")
+AZURE = "azure-devops"
 LOGIN = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$")
 REPO_NAME = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 METHODS = ("agile", "waterfall")
@@ -63,10 +68,17 @@ _MAX_YAML_DEPTH = 64
 
 @dataclass(frozen=True)
 class Project:
+    """On GitHub: the Project (v2). On Azure DevOps: `owner` is the organization and `title` the project's name."""
+
     owner: str
     owner_type: str
     number: int | None
     title: str
+    platform: str = "github"
+
+    @property
+    def azure(self) -> bool:
+        return self.platform == AZURE
 
 
 @dataclass(frozen=True)
@@ -215,6 +227,7 @@ class Board:
     agents: AgentsView
     ui_only: tuple[str, ...] = ()
     process: Process = field(default_factory=Process)
+    azure: AzureDevOps | None = None  # the `azure_devops` block of an Azure DevOps board, else None
 
     def field_named(self, name: str) -> Field | None:
         return next((f for f in self.fields if f.name == name), None)
@@ -439,7 +452,18 @@ def parse_board(data: object, source: str = "board.yaml", *, check_fields: bool 
     top = r.mapping(
         data,
         "",
-        {"version", "project", "repositories", "fields", "views", "rules", "agents", "ui_only", "process"},
+        {
+            "version",
+            "project",
+            "repositories",
+            "fields",
+            "views",
+            "rules",
+            "agents",
+            "ui_only",
+            "process",
+            "azure_devops",
+        },
         {"version", "project", "repositories"},
     )
 
@@ -448,25 +472,43 @@ def parse_board(data: object, source: str = "board.yaml", *, check_fields: bool 
     if isinstance(version_val, bool) or not isinstance(version_val, int) or version_val != 1:
         raise r.fail("version", "only version 1 is supported")
 
-    p = r.mapping(
-        top["project"], "project", {"owner", "owner_type", "number", "title"}, {"owner", "owner_type", "title"}
-    )
-    owner = r.string(p["owner"], "project.owner")
-    if not LOGIN.fullmatch(owner):
-        raise r.fail("project.owner", f"{rep(owner)} is not a GitHub login")
-    number = None if p.get("number") is None else r.integer(p["number"], "project.number", minimum=1)
-    project = Project(
-        owner,
-        r.choice(p["owner_type"], "project.owner_type", OWNER_TYPES),
-        number,
-        r.string(p["title"], "project.title"),
-    )
+    platform = "github"
+    if isinstance(top["project"], Mapping) and "platform" in top["project"]:
+        platform = r.choice(top["project"]["platform"], "project.platform", PLATFORMS)
+    if platform == AZURE:
+        from safo.ado import config as ado_config  # an Azure DevOps board only: GitHub boards never load it
+
+        project = ado_config.parse_project(r, top["project"])
+    else:
+        p = r.mapping(
+            top["project"],
+            "project",
+            {"owner", "owner_type", "number", "title", "platform"},
+            {"owner", "owner_type", "title"},
+        )
+        owner = r.string(p["owner"], "project.owner")
+        if not LOGIN.fullmatch(owner):
+            raise r.fail("project.owner", f"{rep(owner)} is not a GitHub login")
+        number = None if p.get("number") is None else r.integer(p["number"], "project.number", minimum=1)
+        project = Project(
+            owner,
+            r.choice(p["owner_type"], "project.owner_type", OWNER_TYPES),
+            number,
+            r.string(p["title"], "project.title"),
+        )
+        if "azure_devops" in top:
+            raise r.fail("azure_devops", "only a board with project.platform: azure-devops has this key")
 
     repos: list[Repository] = []
     seen_repos: set[str] = set()
     for i, raw in enumerate(_capped(r, top["repositories"], "repositories", MAX_REPOSITORIES)):
         path = f"repositories[{i}]"
-        m = r.mapping(raw, path, {"owner", "name", "default_area", "area_rules", "method"}, {"owner", "name"})
+        m = r.mapping(
+            raw,
+            path,
+            {"owner", "name", "default_area", "area_rules", "method"},
+            {"name"} if project.azure else {"owner", "name"},
+        )
         rules_raw = _capped(r, m.get("area_rules", []), f"{path}.area_rules", MAX_AREA_RULES)
         area_rules = []
         for j, rule in enumerate(rules_raw):
@@ -478,13 +520,17 @@ def parse_board(data: object, source: str = "board.yaml", *, check_fields: bool 
                 )
             )
         repo = Repository(
-            r.string(m["owner"], f"{path}.owner"),
+            r.string(m["owner"], f"{path}.owner") if "owner" in m else project.title,
             r.string(m["name"], f"{path}.name"),
             None if m.get("default_area") is None else r.string(m["default_area"], f"{path}.default_area"),
             tuple(area_rules),
             r.choice_bounded(m["method"], f"{path}.method", METHODS) if "method" in m else None,
         )
-        if not LOGIN.fullmatch(repo.owner) or not REPO_NAME.fullmatch(repo.name):
+        if project.azure:
+            from safo.ado import config as ado_config
+
+            ado_config.check_repository(r, repo, path)
+        elif not LOGIN.fullmatch(repo.owner) or not REPO_NAME.fullmatch(repo.name):
             raise r.fail(path, f"{rep(repo.full_name)} is not an owner/name pair")
         if repo.full_name.lower() in seen_repos:
             raise r.fail(path, f"{repo.full_name} is listed twice")
@@ -574,8 +620,14 @@ def parse_board(data: object, source: str = "board.yaml", *, check_fields: bool 
     )
     process = _parse_process(r, top.get("process", {}), tuple(repos), rules)
     board = Board(project, tuple(repos), tuple(fields), tuple(views), rules, agents, ui_only, process)
+    if project.azure:
+        from safo.ado import config as ado_config
+
+        board = ado_config.attach(r, board, top.get("azure_devops"))
     if check_fields:
         _cross_check(r, board, agents_present="agents" in top)
+        if project.azure:
+            ado_config.cross_check(r, board)
     return board
 
 

@@ -37,6 +37,42 @@ def default_client(board: Board, env: Mapping[str, str], dry_run: bool) -> Clien
     return Client(creds.token, url, dry_run=dry_run)
 
 
+AdoClientFactory = Callable[[Board, Mapping[str, str], bool], Any]
+
+
+def default_ado_client(board: Board, env: Mapping[str, str], dry_run: bool) -> Any:
+    """An Azure DevOps client for the board's organization: $SAFO_ADO_TOKEN, else the caller's `az` login."""
+    from safo.ado import credentials as ado_credentials
+    from safo.ado.client import AdoClient
+
+    creds = ado_credentials.resolve(env)
+    url = ado_credentials.base_url(env, creds)
+    return AdoClient(creds.token, board.project.owner, kind=creds.kind, base_url=url, dry_run=dry_run)
+
+
+def run_azure(
+    mode: str,
+    board: Board,
+    args: argparse.Namespace,
+    env: Mapping[str, str],
+    factory: AdoClientFactory,
+    out: TextIO,
+    today: dt.date,
+) -> int:
+    """A board mode on an Azure DevOps board (project.platform: azure-devops)."""
+    from safo.ado import credentials as ado_credentials
+    from safo.ado import modes as ado_modes
+
+    try:
+        client = factory(board, env, args.dry_run)
+    except ado_credentials.NoAdoTokenError:
+        if not args.dry_run:
+            raise
+        output.write(out, "UNKNOWN no token: nothing read; use validate for offline configuration checks")
+        return 2
+    return ado_modes.run(mode, ado_modes.AdoContext(board, client, out, today, env), args)
+
+
 def resolve_board(path: str | None, env: Mapping[str, str]) -> Board:
     """--board, then $SAFO_BOARD, then the board-less inputs ($SAFO_PROJECT_URL), then ./board.yaml."""
     chosen = path or env.get("SAFO_BOARD", "")
@@ -62,7 +98,9 @@ class HookSafeParser(argparse.ArgumentParser):
 
 
 def build_parser() -> tuple[argparse.ArgumentParser, dict[str, argparse.ArgumentParser]]:
-    parser = HookSafeParser(prog="safo", description="Scrum Around and Find Out: a GitHub Project defined as code.")
+    parser = HookSafeParser(
+        prog="safo", description="Scrum Around and Find Out: a GitHub Project or Azure Boards defined as code."
+    )
     parser.add_argument("--version", action="version", version=f"safo {__version__}")
     parser.add_argument("--board", default=None, help="the board file (default: $SAFO_BOARD, else ./board.yaml)")
     parser.add_argument("--gh-user", default="", help="use this logged-in gh account's token instead of the active one")
@@ -107,6 +145,7 @@ def _run(
     today: dt.date | None = None,
     now: dt.datetime | None = None,
     stdin: TextIO | None = None,
+    ado_client_factory: AdoClientFactory = default_ado_client,
 ) -> int:
     env = os.environ if env is None else env
     out = out or sys.stdout
@@ -141,6 +180,8 @@ def _run(
             if note:
                 output.write(out, note)
             return 0
+        if board.project.azure:
+            return run_azure(args.mode, board, args, env, ado_client_factory, out, today or clock.date())
         try:
             client = client_factory(board, env, args.dry_run)
         except credentials.NoTokenError:
@@ -163,8 +204,19 @@ def main(
     today: dt.date | None = None,
     now: dt.datetime | None = None,
     stdin: TextIO | None = None,
+    ado_client_factory: AdoClientFactory = default_ado_client,
 ) -> int:
-    code = _run(argv, env=env, client_factory=client_factory, out=out, err=err, today=today, now=now, stdin=stdin)
+    code = _run(
+        argv,
+        env=env,
+        client_factory=client_factory,
+        out=out,
+        err=err,
+        today=today,
+        now=now,
+        stdin=stdin,
+        ado_client_factory=ado_client_factory,
+    )
     warning = guardlog.LOCK_TIMEOUT_WARNING
     if warning and hooks.hook_event(sys.argv[1:] if argv is None else argv) is None:  # never for the hooks
         with contextlib.suppress(OSError, ValueError):

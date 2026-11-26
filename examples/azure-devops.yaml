@@ -1,0 +1,73 @@
+# SPDX-License-Identifier: Apache-2.0
+# A board on Azure DevOps: the work items of one Azure DevOps project are the cards, its Azure Repos pull requests are
+# checked for linked work items. See docs/azure-devops.md for how each key maps onto Azure Boards.
+#
+# Copy it to your board file and change the organization, project, team and repositories.
+version: 1
+project:
+  platform: azure-devops
+  owner: acme            # the organization: https://dev.azure.com/acme
+  title: Platform        # the Azure DevOps project
+azure_devops:
+  team: Platform Team                  # the team whose iterations the Sprint field selects (default: "<project> Team")
+  process: SAFO Agile                  # optional: the inherited process the project must use (audit checks it)
+  work_item_types: [User Story, Bug]   # the work item types that are cards
+  default_area: Core                   # the Area an item gets when no area rule matches
+  area_rules:
+    - {match: docs, area: Docs}
+    - {match: pipeline, area: CI and release}
+  queries_folder: SAFO                 # views become shared queries in Shared Queries/SAFO
+  status_page: SAFO Status             # `status --post` writes <status_page>/<YYYY-MM-DD> in the project wiki
+  closed_days: 30                      # reconcile reads items completed in the last 30 days, to fill Done on
+  state_categories: {Blocked: InProgress}
+repositories:
+  - {name: api}                        # an Azure Repos repository in the project
+  - {owner: Shared, name: pipelines}   # one in another project of the organization
+fields:
+  - name: State                        # rules.status_field: the work item State; the options are states
+    type: single_select
+    options:
+      - {name: New, color: GRAY}
+      - {name: Active, color: BLUE}
+      - {name: Blocked, color: RED}
+      - {name: Resolved, color: YELLOW}
+      - {name: Closed, color: GREEN}
+  - name: Area                         # rules.area_field: the Area Path; the options are areas under the project
+    type: single_select
+    options:
+      - {name: Core}
+      - {name: Docs}
+      - {name: CI and release}
+  - name: Agent                        # a custom picklist field, Custom.Agent
+    type: single_select
+    options:
+      - {name: Claude}
+      - {name: Codex}
+      - {name: Copilot}
+      - {name: You}
+  - name: Kind
+    type: single_select
+    options:
+      - {name: Feature}
+      - {name: Fix}
+      - {name: Chore}
+  - {name: Effort, type: number}
+  - {name: Epic, type: text}
+  - {name: Sprint, type: iteration, start: 2026-10-20, duration_days: 14, count: 6}  # the Iteration Path
+  - {name: Done on, type: date}        # Custom.DoneOn
+views:
+  - {name: Open bugs, layout: table, filter: "[System.WorkItemType] = 'Bug' AND [System.State] <> 'Closed'"}
+  - {name: Blocked, layout: board, filter: "[System.State] = 'Blocked'"}
+rules:
+  status_field: State
+  area_field: Area
+  status: {opened: New, reopened: Active, closed: Closed, merged: Closed}
+  done_date_field: Done on
+  new_item_defaults: {Agent: You}
+  tracking:
+    exempt_authors: [dependabot]
+  gate_check: CI green                 # a blocking build validation (or status) policy of this name on each main
+agents:
+  field: Agent
+  working: [Active]
+  waiting: [Blocked]

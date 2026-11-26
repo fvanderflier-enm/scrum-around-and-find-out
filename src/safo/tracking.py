@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 """No hidden work: a brief names the tracking item it serves, and the reference is checked before it is believed.
 
-A reference is one line of its own, `issue: owner/repo#123` (GitHub) or `issue: KEY-123` (a Jira-style key). The
+A reference is one line of its own, `issue: owner/repo#123` (GitHub), `issue: KEY-123` (a Jira-style key) or
+`issue: AB#123` (an Azure Boards work item). The
 tracker sits behind one seam, `Resolver`, which answers whether a reference is usable. GitHub is looked up read-only
-with `gh issue view`; a Jira key is validated by its shape alone, because no Jira instance exists today. A tracker
-that is added later only needs a resolver and a pattern here.
+with `gh issue view`; a Jira key and an Azure Boards reference are validated by their shape alone (a hook has
+seconds, and `az` takes longer than that to start; `safo audit` on an Azure DevOps board checks the work items
+themselves). A tracker that is added later only needs a resolver and a pattern here.
 
 Nothing in a brief reaches a shell: a reference must fullmatch a strict pattern first, and `gh` runs from an argument
 list with no shell. A rejected reference is never echoed back.
@@ -31,6 +33,7 @@ from safo.guardlog import trusted_dir
 LINE = re.compile(r"^[ \t]*issue:[ \t]*(\S+)[ \t]*\r?$", re.IGNORECASE | re.MULTILINE)
 GITHUB_REF = re.compile(r"([A-Za-z0-9](?:[A-Za-z0-9-]{0,38}))/([A-Za-z0-9._-]{1,100})#([1-9][0-9]{0,8})")
 JIRA_KEY = re.compile(r"([A-Z][A-Z0-9]{1,9})-([1-9][0-9]{0,8})")
+AZURE_KEY = re.compile(r"AB#([1-9][0-9]{0,8})")  # an Azure Boards work item, as Azure DevOps itself writes it
 LOOKUP_TIMEOUT_SECONDS = 5
 ISSUE_URL = re.compile(r"https://[^/\s]+/[^/\s]+/[^/\s]+/(issues|pull)/[0-9]+")
 
@@ -45,7 +48,7 @@ HOW_TO_FILE = (
 
 @dataclass(frozen=True)
 class Ref:
-    tracker: Literal["github", "jira"]
+    tracker: Literal["github", "jira", "azure"]
     text: str  # the validated reference, safe to print
     repo: str = ""  # owner/name (GitHub only)
     number: int = 0
@@ -63,6 +66,9 @@ def parse(text: str) -> Ref | None:
             return Ref("github", value, f"{github.group(1)}/{github.group(2)}", int(github.group(3)))
         if JIRA_KEY.fullmatch(value):
             return Ref("jira", value)
+        azure = AZURE_KEY.fullmatch(value)
+        if azure:
+            return Ref("azure", value, number=int(azure.group(1)))
     return None
 
 
@@ -344,7 +350,7 @@ def check(text: str, resolve: Resolver, accepted: Collection[str] | None = None)
         return (
             "no-issue",
             (
-                "the brief's `issue:` line is not owner/repo#N or KEY-N; "
+                "the brief's `issue:` line is not owner/repo#N, KEY-N or AB#N; "
                 if invalid
                 else "the brief names no tracking item; "
             )

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Azure DevOps (`safo.ado`, docs/azure-devops.md): a board file with `project.platform: azure-devops` and an
+  `azure_devops` block describes one Azure DevOps project. The work items of the listed types are the cards; the status
+  field is the State, the area field the Area Path, the iteration field the Iteration Path (iterations selected by the
+  team), other fields custom fields on the inherited process, views shared queries. `bootstrap` only adds (states,
+  fields and picklists, fields on the types, areas, iterations, team iterations, queries) and never edits what exists;
+  `audit` also checks pull requests for linked work items, open work items for Kind, Epic and Effort, and each
+  repository's default branch for a blocking build validation or status policy named `rules.gate_check`; `reconcile`
+  and `sync` (`--work-item N` or a service hook payload) fill the Area Path, `new_item_defaults` and the Done-on date
+  with a JSON Patch that tests the revision it read; `status --post` writes a new project wiki page; `agents-status`
+  reads the Agent field. The REST client keeps the GraphQL client's rules (no redirects, capped and strictly framed
+  answers, a write never resent after it went out, the token never in a message). Credentials: `SAFO_ADO_TOKEN` (a PAT,
+  or `SAFO_ADO_TOKEN_KIND=bearer` for `$(System.AccessToken)`), else `az account get-access-token`. The dispatch guard
+  accepts `issue: AB#n` on its shape. Tests: `tests/test_ado_modes.py`, `tests/test_ado_units.py` (against a loopback
+  fake, `tests/fakeado.py`); not yet run against a live organization.
+
 - `safo local report` (#372, #380): read-only counts of local-model use per day, week and model from the dispatch-guard
   log, the `safo hooks status` guard counts and the `llm-local` calls and admission state, with a MISSING DATA section
   and `--json`. Nothing is written or created (the hooks log is read without its lock). Bounded reads, malformed, torn

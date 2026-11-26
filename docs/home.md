@@ -38,6 +38,7 @@ small team of AI agents (Claude, Codex, Copilot) under one human maintainer, wit
 - [The idea gate and cross-project line](file.md): `safo-file` matches an idea against the tracked repos, `gh repo list` and memory, requires one answer, and counts cross-project issues.
 - [Limits](limits.md): reading each tool's real usage and deciding when to switch.
 - [Board](board.md) and the [board.yaml reference](board-yaml.md): the project as code.
+- [Azure DevOps](azure-devops.md): the same board file and commands on Azure Boards and Azure Repos: the mapping, the credentials and an Azure Pipelines example.
 - [Approval issues](approvals.md): how a gate or change approval is read and what it must say.
 - [agents-status](agents-status.md): one read-only view of what every agent is doing.
 - [Lessons](lessons.md): what went wrong, the evidence, and the rule the code enforces now.

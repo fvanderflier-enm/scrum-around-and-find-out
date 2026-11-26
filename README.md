@@ -43,6 +43,7 @@ Checked 2026-10-26 against `main` at cf53799.
 | The usage meter fix and the outcomes fields (the Claude meter now reads the usage fields Claude Code nests in its transcripts; outcomes records gain `model` and `credits_used`) | Built, merged on `main` and released in v0.1.2 |
 | Generated docs and the wiki mirror (`scripts/gen_wiki.py`, published by `.github/workflows/wiki.yml` through GYST's `wiki-publish.yml`) | Built, merged on `main` and live: the wiki is the generated mirror of `docs/` |
 | Personas (`docs/personas.md`, a description of the Department of Internal Arguments roles and how to install them, with no copies kept here) and the examples (the outcomes log, systemd units) | Built and merged on `main` |
+| Azure DevOps (`project.platform: azure-devops`: Azure Boards work items as the cards, Azure Repos pull requests checked for linked work items; `bootstrap`, `audit`, `reconcile`, `sync`, `status` and `agents-status`; a PAT or the caller's `az login`; `issue: AB#n` in a brief; see [docs/azure-devops.md](docs/azure-devops.md)) | Built on a branch; tested against a loopback fake of the REST API only, not yet against a live organization |
 | [Measurements](docs/measurements.md): what the first month measured, dated and aggregated | Written; read it as a soak, not a finding |
 | Issue #23 roadmap: agent profiles, promotion of lessons into rules, and metrics from the outcomes log | Profiles are built in stages: the loader, evidence resolution, `profiles verify` and the rendering into `examples/harness/`, and `profiles brief` (see [Agent profiles](docs/profiles.md)); the route surface, promotion that changes selection, and metrics from the outcomes log are not built |
 
@@ -71,6 +72,9 @@ and the implementation plan is split into seven pull-request groups, listed on t
 | `hooks` | Makes Claude Code enforce `agents.yaml`: a session probe of the local model and a guard on every Agent dispatch (an explicit model, the approval token for Opus, a named local step). `install`, `mode`, `status`, `probe`, `guard`; the installed guard hook is the `safo-guard` entry point ([`docs/hooks.md`](docs/hooks.md)) |
 | `gemini` | `quota`, `ask`, `keys`, and the broker entries `paid` and `paid-dryrun`: a Gemini client that cannot spend money on its own: free-tier calls for public material follow the maintainer's own rate limits from a local ledger, a 429 stops the job and never falls through to a billed call, and a billed call goes only through the broker with its own single-use approval signed by a hardware security key; `keys` lists and checks the enrolled keys. The free key is read by name from the secret store at call time. Read-only unless you ask; see [`docs/gemini.md`](docs/gemini.md) |
 | `doctor` | Is each prerequisite present, missing or too old? Python, git and gh are required; the other tools, plugins and skill packs are reported. Read-only: it runs only `<tool> --version`. See [`docs/prerequisites.md`](docs/prerequisites.md) |
+
+On an Azure DevOps board (`project.platform: azure-devops`) the board modes read and write Azure Boards and Azure Repos
+instead; see [docs/azure-devops.md](docs/azure-devops.md) for the mapping, the credentials and an Azure Pipelines example.
 
 The Action runs the modes that talk to the board. The local modes (`usage`, `route`, `outcome`, `local`, `hooks`, `profiles`, `handoff`, `protection`, `doctor`) read
 files on a person's machine, or `protection` the repository's settings, and are not allowed in the Action.
@@ -162,6 +166,7 @@ replaced are gone.
 - [Limits](https://github.com/ChiefGyk3D/scrum-around-and-find-out/wiki/Limits)
 - [Board](https://github.com/ChiefGyk3D/scrum-around-and-find-out/wiki/Board)
 - [Board-yaml](https://github.com/ChiefGyk3D/scrum-around-and-find-out/wiki/Board-yaml)
+- [Azure-devops](https://github.com/ChiefGyk3D/scrum-around-and-find-out/wiki/Azure-devops)
 - [Agents-status](https://github.com/ChiefGyk3D/scrum-around-and-find-out/wiki/Agents-status)
 - [Lessons](https://github.com/ChiefGyk3D/scrum-around-and-find-out/wiki/Lessons)
 - [Measurements](https://github.com/ChiefGyk3D/scrum-around-and-find-out/wiki/Measurements)

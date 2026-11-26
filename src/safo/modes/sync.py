@@ -151,6 +151,8 @@ def _report(ctx: Context, number: int, did: list[str], added: bool) -> None:
 
 
 def run(ctx: Context, args: argparse.Namespace) -> int:
+    if getattr(args, "work_item", 0):
+        raise ConfigError("--work-item is for an Azure DevOps board; on GitHub, sync reads an event payload")
     event_name = args.event_name or ctx.env.get("GITHUB_EVENT_NAME", "")
     path = args.event_path or ctx.env.get("GITHUB_EVENT_PATH", "")
     if not path:
@@ -323,6 +325,9 @@ def stopped(
 def add_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--event-path", default="", help="the event payload (default: $GITHUB_EVENT_PATH)")
     parser.add_argument("--event-name", default="", help="the event name, for messages (default: $GITHUB_EVENT_NAME)")
+    parser.add_argument(
+        "--work-item", type=int, default=0, help="Azure DevOps boards only: bring this work item in line"
+    )
 
 
 register(Mode("sync", "bring the card of one issue or pull request event in line", add_arguments, run))
