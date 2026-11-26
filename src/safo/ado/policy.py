@@ -122,7 +122,7 @@ def hidden_pulls(board: Board, pulls: Mapping[str, Sequence[PullRequest]]) -> li
             continue
         for pull in rows:
             if pull.status == "active" and not pull.work_items and not _author_exempt(board, pull):
-                out.append(f"pull request {pull.label} links no work item (link one, or write AB#n in it)")
+                out.append(f"pull request {pull.label} links no work item (add one under its Work items)")
     return out
 
 
